@@ -1,0 +1,17 @@
+// UserDatabases.scss
+.button-container {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+    margin-right: 16px;
+  
+    // Update the button style
+    .MuiButton-containedPrimary {
+      background-color: rgb(4, 59, 114);
+  
+      &:hover {
+        background-color: rgb(2, 38, 74); // Apply the same color on hover if desired
+      }
+    }
+  }
+  

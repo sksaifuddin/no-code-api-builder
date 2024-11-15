@@ -1,0 +1,87 @@
+// ApiList.scss
+.api-list {
+    width: 80%;
+    margin: 0 auto;
+  
+    .accordion {
+      margin-bottom: 16px;
+      border: 1px solid #e0e0e0;
+      box-shadow: none;
+      border-radius: 8px;
+  
+      .MuiAccordionSummary-root {
+        background-color: #1976d2;
+        color: #fff;
+        font-weight: bold;
+        border-radius: 8px;
+  
+        .MuiAccordionSummary-content {
+          margin: 0;
+        }
+  
+        .MuiAccordionSummary-expandIconWrapper {
+          color: #fff;
+        }
+      }
+  
+      .MuiAccordionDetails-root {
+        flex-direction: column;
+      }
+  
+      .MuiButton-root {
+        background-color: #1976d2;
+        color: #fff;
+        font-weight: bold;
+        &:hover {
+          background-color: #1565c0;
+        }
+      }
+    }
+  
+    .api-type {
+      padding: 8px;
+      min-width: 90px;
+      text-align: center;
+      background-color: #1976d2; /* Add background color */
+      color: #fff; /* Add text color */
+      font-weight: bold; /* Make text bold */
+    }
+  
+    .api-url {
+      padding: 8px;
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      border: 1px solid #1976d2; /* Add border */
+      border-radius: 8px; /* Add border radius */
+      margin: 8px 0; /* Add margin between each API */
+    }
+  
+    .copy-icon {
+      margin-left: 8px;
+      cursor: pointer;
+    }
+
+    .api-list__endpoint {
+        display: flex; /* Make the elements inside this class flex */
+        align-items: center; /* Align items vertically at the center */
+    
+        .api-type {
+          /* ... styles for the request type ... */
+          flex: 1; /* Let the request type box take available space */
+          margin-right: 8px; /* Add some spacing between request type and URL */
+        }
+    
+        .api-url {
+          /* ... styles for the request URL ... */
+          flex: 3; /* Let the URL box take more space */
+          margin-right: 8px; /* Add some spacing between URL and Copy button */
+        }
+    
+        .copy-icon {
+          /* ... styles for the copy button ... */
+          flex: 1; /* Let the copy button take available space */
+        }
+      }
+  }
+  

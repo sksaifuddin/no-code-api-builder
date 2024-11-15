@@ -1,0 +1,184 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: API builder Term assignment template
+
+Resources:
+
+  // For backend deployment
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0f34c5ae932e6f0e4
+      SecurityGroups:
+        - !Ref EC2SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y docker
+          service docker start
+          usermod -a -G docker ec2-user
+          docker pull shaiksaifuddin/api-builder:latest
+          docker run -d -p 80:8080 shaiksaifuddin/api-builder:latest
+  
+  // for frontend deployment
+  EC2InstanceFrontend:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0f34c5ae932e6f0e4
+      SecurityGroups:
+        - !Ref EC2SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y docker
+          service docker start
+          usermod -a -G docker ec2-user
+          docker pull shaiksaifuddin/api-builder-frontend:latest
+          docker run -d -p 80:3000 -e REACT_APP_NODE_SERVER_IP=http://${EC2Instance.PublicIp} shaiksaifuddin/api-builder-frontend
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH and HTTP access
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+
+  APIBuilderDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      DBName: apibuilder
+      MasterUsername: admin
+      MasterUserPassword: password
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: 20
+      StorageType: gp2
+      MultiAZ: false
+      PubliclyAccessible: true
+      VPCSecurityGroups:
+        - !GetAtt APIDatabaseSecurityGroup.GroupId
+      Tags:
+        - Key: Name
+          Value: APIBuilderDatabase
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      DBInstanceIdentifier: !Sub "ApiBuilderRDSInstance-${AWS::StackName}"
+
+  // lambda which will be triggered when RDS instance is created
+  TriggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "ApiBuilderTriggerFunction"
+      Runtime: nodejs14.x
+      Handler: "index.handler"
+      Role: arn:aws:iam::551539299746:role/LabRole
+      Code:
+        S3Bucket: my-function-code-b00
+        S3Key: apibuilder-trigger.zip
+  
+  ApiBuilderTriggerCustomResource:
+    Type: Custom::ApiBuilderTriggerCustomResource
+    Properties:
+      ServiceToken: !GetAtt TriggerFunction.Arn
+      DBInstanceIdentifier: !Ref APIBuilderDatabase
+  
+  APIDatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable access to RDS instance for API Builder
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+
+  // function which handles API execution
+  apiExecutionFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "apiExecutionFunction"
+      Runtime: nodejs14.x
+      Handler: "index.handler"
+      Role: arn:aws:iam::551539299746:role/LabRole
+      Code:
+        S3Bucket: my-function-code-b00
+        S3Key: api-endpoint-handler.zip
+      Timeout: 100
+
+  apiExecutionLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref apiExecutionFunction
+      Action: "lambda:InvokeFunction"
+      Principal: apigateway.amazonaws.com
+
+  // api gateway
+  ApiBuilderHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: apiBuilder
+      ProtocolType: HTTP
+      Description: HTTP API for API Builder
+  
+
+  ApiBuilderProxyPlusIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiBuilderHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${apiExecutionFunction.Arn}/invocations'
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+  
+  ApiBuilderProxyPlusRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiBuilderHttpApi
+      RouteKey: ANY /{proxy+}
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiBuilderProxyPlusIntegration
+  
+  ApiBuilderDefaultStage:
+      Type: AWS::ApiGatewayV2::Stage
+      Properties:
+        ApiId:
+          Ref: ApiBuilderHttpApi
+        AutoDeploy: true
+        StageName: dev
+  
+  APIBuilderSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: APIBuilderSecret
+      Description: API Builder secrets
+      SecretString: !Sub |
+        {
+          "user": "admin",
+          "password": "password",
+          "database": "apibuilder",
+          "secretkey": "shaik-saifuddin-b00934531",
+          "apigateway": "https://${ApiBuilderHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiBuilderDefaultStage}",
+          "host": "${APIBuilderDatabase}"
+        }
+
+  # ApiBuilderSNSTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     TopicName: "ApiBuilderTopic" 
+  #     DisplayName: "API Builder SNS Topic"
+  #     Subscription:
+  #       - Protocol: email
+  #         Endpoint: "shaiksaifuddin95@gmail.com"
